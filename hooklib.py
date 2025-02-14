@@ -24,16 +24,6 @@ import inspect
 # re                                                                      | Regular expression operations. Oh boy.
 import re
 
-# ast                                                                     | Abstract Syntax Tree (AST) module.
-import ast
-
-# ++ ------------------------------------------------------------------------------------------------------------------------------------------- ++ #
-### --                                                            External Libraries                                                           -- ###
-# ++ ------------------------------------------------------------------------------------------------------------------------------------------- ++ #
-
-# asyncio                                                                 | Asynchronous I/O, event loop, coroutines, and tasks. Leftover from an old variant of modular_fn.
-import asyncio
-
 # ++ ------------------------------------------------------------------------------------------------------------------------------------------- ++ #
 ### --                                                   Globals (Pre-Function Definitions)                                                    -- ###
 # ++ ------------------------------------------------------------------------------------------------------------------------------------------- ++ #
@@ -85,7 +75,7 @@ def modular_fn(current_globals: dict):
             "function": f,
             "source": src,
             "line_count": len(src.split('\n')),
-            #"_return_value": None # No more globals!
+            "mod_line_counts": [] # list of 2-tuple (line number, number of added lines)
         }
 
 
@@ -201,10 +191,22 @@ def module(fn_name: str, line: int):
         # Get to work - First, the source code.
         fn_src = fn_obj["source"]
         fn_line_count = fn_obj["line_count"]
+        fn_mod_ln_counts = fn_obj["mod_line_counts"]
         fn_src_split = fn_src.split("\n")
 
         if line + 1 > fn_line_count or line < -fn_line_count:
             raise IndexError(f"Index out of range (line '{line}' is larger than the function being patched)")
+
+        # Let i be the current mod line count: If i[0] is less than line as it is right now, add i[1] to line.
+        new_line = line
+
+        for i in fn_mod_ln_counts:
+
+            if i[0] < line:
+
+                new_line += (i[1] - 1) # Hypothesis: If we want to insert a module at line 0, and a module of 3 lines has already been inserted there, we end up at index 2.
+
+        line = new_line
 
         # Get the source code of our module.
         module_src = inspect.getsource(f)
@@ -224,7 +226,7 @@ def module(fn_name: str, line: int):
         fn_src_split.insert(line + skipped_line_count, module_src)
 
         hooklib_tracked_functions[fn_name]["source"] = "\n".join(fn_src_split)
-        hooklib_tracked_functions[fn_name]["line_count"] = len(fn_src_split)
+        hooklib_tracked_functions[fn_name]["mod_line_counts"].append((line + skipped_line_count, len(module_src.split("\n"))))
 
         return f
 
