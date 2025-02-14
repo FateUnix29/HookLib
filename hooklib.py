@@ -46,64 +46,48 @@ hooklib_tracked_functions = {}
 
 ## Regular Functions ##
 
-def get_file_globals(file_path):
-
-    with open(file_path, 'r') as file:
-        content = file.read()
-    
-    tree = ast.parse(content)
-    
-    # Extract global names from the AST
-    global_names = set()
-
-    for node in ast.walk(tree):
-
-        if isinstance(node, ast.Assign):
-
-            for target in node.targets:
-
-                if isinstance(target, ast.Name):
-                    global_names.add(target.id)
-
-        elif isinstance(node, ast.FunctionDef):
-            global_names.update(node.args.args)
-
-    # Get the file's globals
-    file_globals = {}
-
-    for name in global_names:
-
-        if name in globals():
-
-            file_globals[name] = globals()[name]
-
-    return file_globals
+# None.
 
 # ++ ------------------------------------------------------------------------------------------------------------------------------------------- ++ #
 
 ## Decorators ##
 
-def modular_fn():
-    """A decorator that adds this function as a modifiable target for HookLib.
-    Think IL hooking.
+def modular_fn(current_globals: dict):
+    """A decorator that adds this function as a modifiable target for HookLib.<br>
+    Think IL hooking.<br><br>
     
-    NOTE: It is heavily recommended that this be the first decorator of any function you want to modify.
-    If you do not do this, expect heavily undefined behavior.
-    There are some exceptions to this rule. For example, declaring this below the @client.event decorator of a discord.py bot is fine and actually recommended."""
+    NOTE: It is heavily recommended that this be the only decorator of a function, as extra decorators will confuse HookLib, unless the function is in the same file as these functions.<br>
+    If you need a function with extra decorators, say, a Discord.py bot, just have the function call a function that's only decorated with modular_fn.<br>
+    Alternatively, you may be able to declare the function with extra decorators *within* the function decorated with modular_fn. Unlikely, but possible."""
 
     def decorator(f):
 
-        src = inspect.getsource(f)
-
         # We need to un-intent the source code until at least one line is touching the left margin.
         # Once at least one line is no longer indented, we must stop immediately to preserve indentations of say, function contents.
+
+        # note: src will be in a different file thats importing this one
+        try:
+
+            src = inspect.getsource(f)
+
+        except OSError:
+            # If src is in a different file, we can't get the source code. This is a problem.
+            #raise OSError("Tried to get source code of a function that is not in the same file.")
+
+            # Let's try anyway.
+            filename = inspect.getfile(f)
+            print("If you see this, HookLib is unable to retrieve source code and is failing. See the docstring of `module_fn` for more information on how you should resolve this.\n"
+                  "Any odd prints after this one are likely attempts to debug before just silently crashing.\n")
+            print(filename)
+            return
 
         hooklib_tracked_functions[f.__name__] = {
             "function": f,
             "source": src,
             "line_count": len(src.split('\n')),
-            "_return_value": None # No more globals!
+            #"_return_value": None # No more globals!
         }
+
 
         if inspect.iscoroutinefunction(f):
 
@@ -131,20 +115,23 @@ def modular_fn():
 
                 corrected_src = "\n".join(split_src)
 
-                # Get file of function:
-                fn_file = inspect.getfile(f)
-
                 # This ensures that exec has a clean environment every single time.
-                exec_globals = get_file_globals(fn_file)
+                exec_globals = current_globals
                 exec_locals = {}
 
-                exec(re.sub(r"@modular_fn\(\)", "", corrected_src), exec_globals, exec_locals)
+                sanitized_src = re.sub(r"@modular_fn\(.*?\)\)", "", corrected_src)
+                print(f"{sanitized_src=}\n\n")
+
+                exec(sanitized_src, exec_globals, exec_locals)
 
                 # Since exec_locals now has this function, let's try and call it via it's name:
-                fn = exec_locals.get(f.__name__)
+                fn = exec_locals.get(f.__name__, exec_globals.get(f.__name__, exec_globals.get("hooklib_tracked_functions", {}).get(f.__name__, {}).get("function", None)))
+
+                print(f"{exec_globals=}\n\n")
+                print(f"{exec_locals=}\n")
 
                 if not fn:
-                    raise NameError(f"Function '{f.__name__}' was not found in the global scope.")
+                    raise NameError(f"Function '{f.__name__}' was not found in the global (nor locals) scope.")
 
                 return await fn(*args, **kwargs)
 
@@ -174,20 +161,23 @@ def modular_fn():
 
                 corrected_src = "\n".join(split_src)
 
-                # Get file of function:
-                fn_file = inspect.getfile(f)
-
                 # This ensures that exec has a clean environment every single time.
-                exec_globals = get_file_globals(fn_file)
+                exec_globals = current_globals
                 exec_locals = {}
 
-                exec(re.sub(r"@modular_fn\(\)", "", corrected_src), exec_globals, exec_locals)
+                sanitized_src = re.sub(r"@modular_fn\(.*?\)\)", "", corrected_src)
+                print(f"{sanitized_src=}\n\n")
+
+                exec(sanitized_src, exec_globals, exec_locals)
 
                 # Since exec_locals now has this function, let's try and call it via it's name:
-                fn = exec_locals.get(f.__name__)
+                fn = exec_locals.get(f.__name__, exec_globals.get(f.__name__, exec_globals.get("hooklib_tracked_functions", {}).get(f.__name__, {}).get("function", None)))
+
+                print(f"{exec_globals=}\n\n")
+                print(f"{exec_locals=}\n")
 
                 if not fn:
-                    raise NameError(f"Function '{f.__name__}' was not found in the global scope.")
+                    raise NameError(f"Function '{f.__name__}' was not found in the global (nor locals) scope.")
 
                 return fn(*args, **kwargs)
 
