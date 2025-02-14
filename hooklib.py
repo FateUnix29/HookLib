@@ -120,15 +120,11 @@ def modular_fn(current_globals: dict):
                 exec_locals = {}
 
                 sanitized_src = re.sub(r"@modular_fn\(.*?\)\)", "", corrected_src)
-                print(f"{sanitized_src=}\n\n")
 
                 exec(sanitized_src, exec_globals, exec_locals)
 
                 # Since exec_locals now has this function, let's try and call it via it's name:
                 fn = exec_locals.get(f.__name__, exec_globals.get(f.__name__, exec_globals.get("hooklib_tracked_functions", {}).get(f.__name__, {}).get("function", None)))
-
-                print(f"{exec_globals=}\n\n")
-                print(f"{exec_locals=}\n")
 
                 if not fn:
                     raise NameError(f"Function '{f.__name__}' was not found in the global (nor locals) scope.")
@@ -166,15 +162,11 @@ def modular_fn(current_globals: dict):
                 exec_locals = {}
 
                 sanitized_src = re.sub(r"@modular_fn\(.*?\)\)", "", corrected_src)
-                print(f"{sanitized_src=}\n\n")
 
                 exec(sanitized_src, exec_globals, exec_locals)
 
                 # Since exec_locals now has this function, let's try and call it via it's name:
                 fn = exec_locals.get(f.__name__, exec_globals.get(f.__name__, exec_globals.get("hooklib_tracked_functions", {}).get(f.__name__, {}).get("function", None)))
-
-                print(f"{exec_globals=}\n\n")
-                print(f"{exec_locals=}\n")
 
                 if not fn:
                     raise NameError(f"Function '{f.__name__}' was not found in the global (nor locals) scope.")
