@@ -179,6 +179,7 @@ def module(fn_name: str, line: int):
     Additionally, line 0 starts at the first line after the function signature, including whitespace."""
 
     def decorator(f):
+        nonlocal line
 
         fn_obj = hooklib_tracked_functions.get(fn_name)
 
@@ -202,9 +203,9 @@ def module(fn_name: str, line: int):
 
         for i in fn_mod_ln_counts:
 
-            if i[0] < line:
+            if i[0] <= line:
 
-                new_line += (i[1] - 1) # Hypothesis: If we want to insert a module at line 0, and a module of 3 lines has already been inserted there, we end up at index 2.
+                new_line += (i[1]) # Hypothesis: If we want to insert a module at line 0, and a module of 3 lines has already been inserted there, we end up at index 2.
 
         line = new_line
 
@@ -226,7 +227,7 @@ def module(fn_name: str, line: int):
         fn_src_split.insert(line + skipped_line_count, module_src)
 
         hooklib_tracked_functions[fn_name]["source"] = "\n".join(fn_src_split)
-        hooklib_tracked_functions[fn_name]["mod_line_counts"].append((line + skipped_line_count, len(module_src.split("\n"))))
+        hooklib_tracked_functions[fn_name]["mod_line_counts"].append((line, len(module_src.split("\n"))))
 
         return f
 
