@@ -75,7 +75,7 @@ def modular_fn(current_globals: dict):
             "function": f,
             "source": src,
             "line_count": len(src.split('\n')),
-            "mod_line_counts": [] # list of 2-tuple (line number, number of added lines)
+            "line_ptr_indexes": {}, # if you put a module of 3 lines at line 0, line_ptr_indexes will be {"0": 2}. add another at line 1, and its sum(previous keys), so {"0": 2, "1": 2}.
         }
 
 
@@ -191,23 +191,23 @@ def module(fn_name: str, line: int):
 
         # Get to work - First, the source code.
         fn_src = fn_obj["source"]
-        fn_line_count = fn_obj["line_count"]
-        fn_mod_ln_counts = fn_obj["mod_line_counts"]
+        fn_ptrs = fn_obj["line_ptr_indexes"]
+        fn_line_count = fn_obj["line_count"] + sum(list(fn_ptrs.values()))
         fn_src_split = fn_src.split("\n")
 
-        if line + 1 > fn_line_count or line < -fn_line_count:
+        if line + 1 > fn_line_count or line < -1: # This should also theoretically account for modules.
             raise IndexError(f"Index out of range (line '{line}' is larger than the function being patched)")
 
         # Let i be the current mod line count: If i[0] is less than line as it is right now, add i[1] to line.
         new_line = line
 
-        for i in fn_mod_ln_counts:
+        line_ptrs_for_line = fn_ptrs.get(str(line))
 
-            if i[0] <= line:
+        need_add_pointers = False
 
-                new_line += (i[1]) # Hypothesis: If we want to insert a module at line 0, and a module of 3 lines has already been inserted there, we end up at index 2.
-
-        line = new_line
+        if not line_ptrs_for_line:
+            need_add_pointers = True # We do this at the end to make insertions easier.
+            # We can just safely assume it's 0.
 
         # Get the source code of our module.
         module_src = inspect.getsource(f)
@@ -219,15 +219,39 @@ def module(fn_name: str, line: int):
                         line.strip().startswith(f"async def {f.__name__}(")]
 
         # XOR the list with module_src
-        module_src = "\n".join(line for line in module_src_split if line not in banned_lines)
+        unbanned_lines = [line for line in module_src_split if line not in banned_lines]
+        module_src = "\n".join(unbanned_lines)
 
-        skipped_line_count = len(banned_lines)
+        skipped_line_count = len(unbanned_lines)
+
+        # Pointers:
+        # We first need to grab every index in the dict before us.
+        relevant_dict = {key: value for key, value in fn_ptrs.items() if int(key) <= line}
+
+        # Now, we can sum it's values.
+        relevant_dict_sums = sum(list(relevant_dict.values()))
+
+        new_line = line + relevant_dict_sums
 
         # Insert new module source code at the specified index.
-        fn_src_split.insert(line + skipped_line_count, module_src)
+        fn_src_split.insert(new_line + skipped_line_count, module_src)
 
         hooklib_tracked_functions[fn_name]["source"] = "\n".join(fn_src_split)
-        hooklib_tracked_functions[fn_name]["mod_line_counts"].append((line, len(module_src.split("\n"))))
+
+        if need_add_pointers:
+
+            hooklib_tracked_functions[fn_name]["line_ptr_indexes"][str(line)] = relevant_dict_sums + len(module_src.split("\n"))
+
+        else:
+
+            hooklib_tracked_functions[fn_name]["line_ptr_indexes"][str(line)] += len(module_src.split("\n"))
+
+        for i in range(len(hooklib_tracked_functions[fn_name]["line_ptr_indexes"].items())):
+
+            if j := hooklib_tracked_functions[fn_name]["line_ptr_indexes"].get(str(i)):
+
+                if j > line:
+                    hooklib_tracked_functions[fn_name]["line_ptr_indexes"][str(i)] += len(module_src.split("\n"))
 
         return f
 
